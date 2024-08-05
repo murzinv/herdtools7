@@ -676,10 +676,12 @@ asldoc: $(BENTO)
 
 $(V).SILENT:
 
+CROSS_PREFIX ?= aarch64-elf-
+
 litmus-test:: litmus-cata-aarch64-test-std
 litmus-cata-aarch64-test-std: TEMP_DIR:=$(shell mktemp -d)
 litmus-cata-aarch64-test-std:
-	$(LITMUS) -mode std -a 4 catalogue/aarch64/tests/@all -o $(TEMP_DIR)
+	$(LITMUS) -set-libdir $(PWD)/litmus/libdir -mach armv8.1 -gcc=$(CROSS_PREFIX)gcc -mode std -a 4 catalogue/aarch64/tests/@all -o $(TEMP_DIR)
 	make -C $(TEMP_DIR) -j $(J)
 	$(RM) -r $(TEMP_DIR)
 	@ echo "litmus7 in -mode std catalogue aarch64 tests: OK"
@@ -687,19 +689,18 @@ litmus-cata-aarch64-test-std:
 litmus-test:: litmus-cata-aarch64-test-presi
 litmus-cata-aarch64-test-presi: TEMP_DIR:=$(shell mktemp -d)
 litmus-cata-aarch64-test-presi:
-	$(LITMUS) -mode presi -a 4 catalogue/aarch64/tests/@all -o $(TEMP_DIR)
+	$(LITMUS) -set-libdir $(PWD)/litmus/libdir -mach armv8.1 -gcc=$(CROSS_PREFIX)gcc -mode presi -a 4 catalogue/aarch64/tests/@all -o $(TEMP_DIR)
 	make -C $(TEMP_DIR) -j $(J)
 	$(RM) -r $(TEMP_DIR)
 	@ echo "litmus7 in -mode presi catalogue aarch64 tests: OK"
 
-ifeq ($(OS),Darwin)
-KUT_CONFIG_PARAMS=--page-size=4k --cross-prefix=aarch64-elf-
-endif
+KUT_CONFIG_PARAMS=--arch=arm64 --page-size=4k --cross-prefix=$(CROSS_PREFIX)
+
 KUT_DIR:=$(shell mktemp -d)
 
 litmus-dep:
 	cd $(KUT_DIR); \
-	git clone -q git@gitlab.com:kvm-unit-tests/kvm-unit-tests.git; \
+	git clone -q https://gitlab.com/kvm-unit-tests/kvm-unit-tests.git; \
 	cd kvm-unit-tests; \
 	./configure $(KUT_CONFIG_PARAMS); \
 	make
@@ -731,7 +732,7 @@ litmus-cata-aarch64-ifetch-test-kvm: litmus-dep
 litmus-test:: litmus-cata-aarch64-ifetch-test
 litmus-cata-aarch64-ifetch-test: TEMP_DIR:=$(shell mktemp -d)
 litmus-cata-aarch64-ifetch-test:
-	$(LITMUS) -mode std -a 4 catalogue/aarch64/tests/@all -o $(TEMP_DIR)
+	$(LITMUS) -set-libdir $(PWD)/litmus/libdir -mach armv8.1 -gcc=$(CROSS_PREFIX)gcc -mode std -a 4 catalogue/aarch64-ifetch/tests/@all -o $(TEMP_DIR)
 	make -C $(TEMP_DIR) -j $(J)
 	$(RM) -r $(TEMP_DIR)
 	@ echo "litmus7 in -mode std catalogue aarch64-ifetch tests: OK"
