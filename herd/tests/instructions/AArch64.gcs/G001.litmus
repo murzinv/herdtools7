@@ -1,0 +1,16 @@
+AArch64 G001
+variant=shadowstack
+{
+uint64_t x[1];
+
+(* 
+ * point past x[1], x[y] seems to be equivalent to x+y bytes rather than
+ * x+y elements, see mk_sym_with_index
+ *)
+
+0:GCSPR_ELx=x[8];
+0:X0=2;
+}
+P0              ;
+GCSPUSHM X0     ;
+forall x[0]=2;

@@ -121,6 +121,7 @@ module Make (C:Arch_herd.Config)(V:Value.AArch64) =
     | I_NEG_SV _ | I_OP3_SV _ | I_MOVPRFX _
     | I_SMSTART _ | I_SMSTOP _ | I_LD1SPT _ | I_ST1SPT _
     | I_MOVA_TV _ | I_MOVA_VT _ | I_ADDA _
+    | I_GCSPOPM _ | I_GCSPUSHM _ | I_GCSSTR _ | I_GCSSS1 _ | I_GCSSS2 _
       -> true
 
     let is_cmodx_restricted_value =
@@ -322,6 +323,7 @@ module Make (C:Arch_herd.Config)(V:Value.AArch64) =
       | I_INDEX_SI _ | I_INDEX_IS _ | I_INDEX_SS _ | I_INDEX_II _
       | I_RDVL _ | I_ADDVL _ | I_CNT_INC_SVE _
       | I_SMSTART _ | I_SMSTOP _ | I_MOVA_TV _ | I_MOVA_VT _ | I_ADDA _
+      | I_GCSPOPM _ | I_GCSPUSHM _ | I_GCSSTR _ | I_GCSSS1 _ | I_GCSSS2 _
           -> None
 
     let all_regs =
@@ -401,6 +403,10 @@ module Make (C:Arch_herd.Config)(V:Value.AArch64) =
       | I_LD1SPT (_,r,_,_,_,_,_) | I_MOVA_TV (r,_,_,_,_) | I_MOVA_VT (r,_,_,_,_)
       | I_ADDA (_,r,_,_,_)
         -> [r]
+      | I_GCSPUSHM _ | I_GCSSTR _ | I_GCSSS1 _
+        -> [SysReg GCSPR_ELx]
+      | I_GCSPOPM r | I_GCSSS2 r
+        -> [r; SysReg GCSPR_ELx]
       | I_MSR (sr,_)
         -> [(SysReg sr)]
       | I_LDXP (_,_,r1,r2,_)
@@ -484,6 +490,7 @@ module Make (C:Arch_herd.Config)(V:Value.AArch64) =
       | I_SMSTART _ | I_SMSTOP _
       | I_LD1SPT _ | I_ST1SPT _
       | I_MOVA_TV _| I_MOVA_VT _ | I_ADDA _
+      | I_GCSPOPM _ | I_GCSPUSHM _ | I_GCSSTR _ | I_GCSSS1 _ | I_GCSSS2 _
         -> MachSize.No
 
     let reg_defaults =

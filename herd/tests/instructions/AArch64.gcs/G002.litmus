@@ -1,0 +1,10 @@
+AArch64 G002
+variant=shadowstack
+{
+uint64_t x[1]={2};
+
+0:GCSPR_ELx=x[0];
+}
+P0              ;
+GCSPOPM X0      ;
+forall 0:X0=2

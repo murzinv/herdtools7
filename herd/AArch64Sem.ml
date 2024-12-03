@@ -41,6 +41,7 @@ module Make
     let pte2 = kvm && C.variant Variant.PTE2
     let do_cu = C.variant Variant.ConstrainedUnpredictable
     let self = C.variant Variant.Ifetch
+    let gcs = C.variant Variant.ShadowStack
 
     let check_mixed ins =
       if not mixed then
@@ -527,7 +528,10 @@ module Make
       let commit_pred ii = commit_pred_txt None ii
 
 (* Fence *)
-      let create_barrier b ii = M.mk_singleton_es (Act.Barrier b) ii
+      let create_barrier b ii =
+        match b with
+        | AArch64Base.GCSB when not gcs -> M.mk_singleton_es (Act.NoAction) ii
+        | _ -> M.mk_singleton_es (Act.Barrier b) ii
 
 (* Page tables and TLBs *)
       let inv_loc op loc ii =
@@ -3254,6 +3258,57 @@ module Make
         | Some l -> ii.A.addr2v l
         | None ->  V.intToV (ii.A.addr + 4)
 
+(*************************)
+(* Guarded Control Stack *)
+(*************************)
+      let do_gcspush sz rA mop ma ii =
+        lift_memop rA Dir.W true false
+        (fun ac ma mv ->
+          if is_branching && Access.is_physical ac then
+            M.bind_ctrldata_data ma mv (fun a v -> mop ac a v ii)
+          else
+            ma >>| mv >>= fun (a,v) -> mop ac a v ii)
+        (to_perms "w" sz) ma mzero Annot.N ii
+
+      (* similar to str pre-index ? *)
+      let gcspush rs ii =
+        let open AArch64Base in
+        let sz = MachSize.Quad in
+        let rA = SysReg GCSPR_ELx in
+        let off = MachSize.nbytes sz in
+        let ma = read_reg_ord rA ii >>= M.add (V.intToV (-off)) in
+        do_gcspush sz rA
+          (fun ac a _ ii ->
+            M.data_input_next
+              (read_reg_data sz rs ii)
+              (fun v -> do_write_mem sz Annot.N aexp ac a v ii >>| write_reg rA a ii))
+          ma ii
+
+      let do_gcspop sz rA mop ma ii =
+        lift_memop rA Dir.R false false
+        (fun ac ma _ ->
+          if Access.is_physical ac then
+            M.bind_ctrldata ma (mop ac)
+          else
+            ma >>= mop ac)
+        (to_perms "r" sz) ma mzero Annot.N ii
+
+      (* similar to ldr post-index ? *)
+      let gcspop rd ii =
+        let open AArch64Base in
+        let sz = MachSize.Quad in
+        let rA = SysReg GCSPR_ELx in
+        let off = MachSize.nbytes sz in
+        M.delay_kont "gcspop"
+        (read_reg_ord rA ii)
+        (fun a_virt ma ->
+           do_gcspop sz rA
+             (fun ac a ->
+              (M.add a_virt (V.intToV off) >>= fun b -> write_reg rA b ii)
+              >>| do_read_mem sz Annot.N aexp ac rd a ii
+              >>= fun ((), r) -> M.unitT r)
+             ma ii)
+
 (********************)
 (* Main entry point *)
 (********************)
@@ -4256,6 +4311,10 @@ module Make
            let m_fault = mk_fault None Dir.R Annot.N ii ft None in
            let lbl_v = get_instr_label ii in
            m_fault >>| set_elr_el1 lbl_v ii >>! B.Fault [AArch64Base.elr_el1, lbl_v]
+        | I_GCSPOPM rd ->
+           gcspop rd ii
+        | I_GCSPUSHM rs ->
+           gcspush rs ii
 (*  Cannot handle *)
         (* | I_BL _|I_BLR _|I_BR _|I_RET _ *)
         | (I_STG _|I_STZG _|I_STZ2G _
@@ -4263,7 +4322,8 @@ module Make
         | I_LDR_SIMD _| I_STR_SIMD _
         | I_LD1SP _| I_LD2SP _| I_LD3SP _| I_LD4SP _
         | I_ST1SP _|I_ST2SP _|I_ST3SP _|I_ST4SP _
-        | I_SMSTART _ | I_SMSTOP _ |I_LD1SPT _ |I_ST1SPT _) as i ->
+        | I_SMSTART _ | I_SMSTOP _ |I_LD1SPT _ |I_ST1SPT _
+        | I_GCSSTR _ | I_GCSSS1 _ | I_GCSSS2 _) as i ->
             Warn.fatal "illegal instruction: %s" (AArch64.dump_instruction i)
 
 (* Compute a safe set of instructions that can
